@@ -1,5 +1,807 @@
-<!DOCTYPE html><meta charset='utf-8'><title>Josh's Cellar Bonanza — All Features</title>
-<body style='background:#121212;color:#e0e0e0;font-family:Arial,Helvetica,sans-serif;margin:20px'>
-<h1>Josh's Cellar Bonanza</h1>
-<p>This starter includes the repo scaffolding. Ask me to reissue the full app file and I'll attach it here.</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Josh's Cellar Bonanza — Offline (All Features)</title>
+  <style>
+    :root{
+      --bg:#121212; --panel:#1e1e1e; --text:#e0e0e0; --muted:#bdbdbd; --grid:#333; --card:#2a2a2a; --accent:#f1c40f;
+      --pill-bg: rgba(255,255,255,0.08);
+      --pill-stroke: rgba(255,255,255,0.18);
+      --axis:#888;
+      --bar:#36a2eb;
+      --bar2:#ff6384;
+    }
+    *{ box-sizing: border-box; }
+    body { background-color: var(--bg); color: var(--text); font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2, label { color: #ffffff; margin: 0 0 8px; }
+    h1 { margin-bottom: 12px; }
+    .section { margin-bottom: 28px; }
+    .row { display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
+    .chart-container { width: 100%; height: 600px; background: var(--panel); border-radius: 6px; padding: 8px; position: relative; }
+    .notice { position:absolute; inset:8px; display:flex; align-items:center; justify-content:center; text-align:center; color:#bbb; border:1px dashed #444; border-radius:6px; padding:12px; }
+    canvas { width: 100%; height: 100%; display:block; }
+
+    .cooler-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 180px); gap: 12px; margin-top: 10px; }
+    .pallet { background: var(--card); border: 1px solid #555; border-radius: 6px; padding: 6px; display: flex; flex-direction: column; }
+    .pallet-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .entries { flex: 1; overflow-y: auto; margin-top: 6px; }
+    .entry { display: flex; align-items:center; gap:6px; margin-bottom: 6px; }
+    .entry select, .entry input[type=number] { background: var(--bg); color: var(--text); border: 1px solid var(--grid); border-radius: 4px; padding: 4px; font-size: 0.85em; }
+    .entry .remove { background:#3a2a2a; color:#f2aaaa; border:1px solid #553; border-radius:4px; padding:2px 6px; cursor:pointer; }
+    .add-btn { background:var(--panel); color:var(--text); border:1px solid var(--grid); border-radius:4px; padding:4px 6px; cursor:pointer; }
+
+    .tanks-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 10px; }
+    .tank { background: var(--panel); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+    .tank select, .tank input { background: var(--bg); color: var(--text); border: 1px solid var(--grid); border-radius: 4px; padding: 4px; margin: 6px 0; }
+
+    .help { font-size: 0.85em; color:var(--muted); }
+    button, input[type=file], select { background: var(--panel); color: var(--text); border: 1px solid var(--grid); border-radius: 4px; padding: 6px 10px; }
+    button:hover { filter: brightness(1.08); }
+
+    .controls-bar { display:flex; gap:10px; align-items:center; margin: 8px 0; flex-wrap: wrap; }
+    .stack { display:grid; grid-template-columns: 1fr; gap: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Josh's Cellar Bonanza</h1>
+
+  <div class="section">
+    <div class="row">
+      <label for="datafile">Upload weekly CSV/TSV snapshot:</label>
+      <input type="file" id="datafile" accept=".csv,.tsv" />
+      <button id="clearView">Clear View (keep data)</button>
+      <button id="exportData">Export Data</button>
+      <button id="importDataBtn">Import Data</button>
+      <input type="file" id="importData" accept="application/json" style="display:none" />
+      <button id="loadDemo">Load Demo</button>
+      <button id="loadDemoWeek2">Load Demo – Week 2</button>
+    </div>
+    <div class="help">Stored locally: <code>inventoryHistory</code>, <code>kegSnapshot</code>, <code>palletData</code>, <code>tankData</code>, <code>tankDataHistory</code>. Use Export to back up.</div>
+  </div>
+
+  <div class="section">
+    <h2>Consumption Flow (Bar)</h2>
+    <div class="chart-container"><canvas id="flowChart"></canvas></div>
+  </div>
+
+  <div class="section">
+    <h2>Consumption Flow (Sankey-style)</h2>
+    <div class="controls-bar">
+      <div class="stack">
+        <label>Mode:</label>
+        <select id="sankeyMode">
+          <option value="consumed">Consumed</option>
+          <option value="added">Added</option>
+        </select>
+      </div>
+      <div class="stack">
+        <label>Units:</label>
+        <select id="sankeyUnit">
+          <option value="keg">Kegs</option>
+          <option value="bbl">BBL</option>
+        </select>
+      </div>
+    </div>
+    <div class="chart-container" id="sankeyHolder">
+      <canvas id="sankeyCanvas"></canvas>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Keg Inventory</h2>
+    <div class="chart-container"><canvas id="kegChart"></canvas></div>
+  </div>
+
+  <div class="section">
+    <h2>Can Inventory</h2>
+    <div class="chart-container"><canvas id="canChart"></canvas></div>
+  </div>
+
+  <div class="section">
+    <h2>Capacity & Free Space</h2>
+    <div class="chart-container"><canvas id="capacityChart"></canvas></div>
+  </div>
+
+  <div class="section">
+    <h2>Cooler Layout</h2>
+    <div class="cooler-grid"></div>
+  </div>
+
+  <div class="section">
+    <h2>Serving Tank Consumption</h2>
+    <div id="tanksGrid" class="tanks-grid"></div>
+    <button id="saveTanks">Save Tanks</button>
+    <div class="help">Each save appends a dated entry to <code>tankDataHistory</code> with % and bbl.</div>
+  </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // ===== Keys & Globals =====
+  const INV_HISTORY_KEY = 'inventoryHistory';
+  const TANK_HISTORY_KEY = 'tankDataHistory';
+  const KEG_SNAPSHOT_KEY = 'kegSnapshot';
+  const PALLET_KEY = 'palletData';
+  const TANK_DATA_KEY = 'tankData';
+
+  const maxCapBBL = 12.7; // per serving tank
+  window.availableProducts = [];
+
+  let snapshot = JSON.parse(localStorage.getItem(KEG_SNAPSHOT_KEY) || '{}');
+  let sankeyMode = localStorage.getItem('sankeyMode') || 'consumed';
+  let sankeyUnit = localStorage.getItem('sankeyUnit') || 'keg';
+  let viewCleared = false;
+
+  // ---- Render queue: coalesce all repaint requests ----
+  let renderQueued = false;
+  function queueRepaint() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(() => {
+      renderQueued = false;
+      if (viewCleared) {
+        try { drawFlow([],[],[]); } catch(_) {}
+        try { updateSankey([]); } catch(_) {}
+        return;
+      }
+      try { renderFlowFromHistory(); } catch(e){ console.error('[flow]', e); }
+      try { renderSankeyFromHistory(); } catch(e){ console.error('[sankey]', e); }
+      try { renderBarsFromHistory(); } catch(e){ console.error('[bars]', e); }
+      try { renderCapacityFromHistory(); } catch(e){ console.error('[donut]', e); }
+    });
+  }
+
+  // ===== Helpers =====
+  function getCtx(id){
+    const el=document.getElementById(id); if(!el) return null;
+    const dpr = window.devicePixelRatio || 1;
+    const { clientWidth: cw, clientHeight: ch } = el;
+    if (el.width !== cw * dpr || el.height !== ch * dpr) {
+      el.width = cw * dpr; el.height = ch * dpr;
+    }
+    const ctx = el.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return ctx;
+  }
+  function containerOfCanvas(canvasId){ const c = document.getElementById(canvasId); return c ? c.closest('.chart-container') : null; }
+  function setHeightByCount(el, count, cfg={}){
+    if (!el) return;
+    const base = cfg.base ?? 520;     // px base height
+    const per  = cfg.per  ?? 22;      // px added per item beyond threshold
+    const min  = cfg.min  ?? 420;
+    const max  = cfg.max  ?? 2000;
+    const threshold = cfg.threshold ?? 10;
+    const h = Math.min(max, Math.max(min, base + Math.max(0, (count||0) - threshold) * per));
+    const newH = Math.round(h);
+    const prevH = +(el.dataset.lastH || 0);
+    if (Math.abs(prevH - newH) > 1) {
+      el.style.height = newH + 'px';
+      el.dataset.lastH = String(newH);
+    }
+  }
+  function drawEmpty(ctx, W, H, text){
+    ctx.save(); ctx.fillStyle='#bbb'; ctx.font='14px Arial'; ctx.textAlign='center';
+    ctx.fillText(text, W/2, H/2); ctx.restore();
+  }
+
+  // ===== Minimal CSV/TSV parser =====
+  function parseCSVText(text){
+    const t = parseWithDelimiter(text, '\\t');
+    if (t.data.length >= 4 && t.data[2].length > 1) return t;
+    return parseWithDelimiter(text, ',');
+  }
+  function parseWithDelimiter(text, delim){
+    const rows = [];
+    let i=0, field='', row=[], inQuotes=false;
+    function pushField(){ row.push(field); field=''; }
+    function pushRow(){ rows.push(row); row=[]; }
+    while (i < text.length){
+      const c = text[i];
+      if (c === '"'){
+        if (inQuotes && text[i+1] === '"'){ field += '"'; i+=2; continue; }
+        inQuotes = !inQuotes; i++; continue;
+      }
+      if (!inQuotes && c === '\\r'){ i++; continue; }
+      if (!inQuotes && c === '\\n'){ pushField(); pushRow(); i++; continue; }
+      if (!inQuotes && c === delim){ pushField(); i++; continue; }
+      field += c; i++;
+    }
+    if (field.length || row.length) { pushField(); pushRow(); }
+    while (rows.length && rows[rows.length-1].every(v => (v==='' || v==null))) rows.pop();
+    return { data: rows };
+  }
+
+  // ===== Flow Bar (custom canvas) =====
+  function drawFlow(labels, prevData, currData){
+    const ctx = getCtx('flowChart'); if(!ctx) return;
+    const canvas = document.getElementById('flowChart');
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#e0e0e0';
+    ctx.font = '12px Arial';
+
+    const leftPad = 120, rightPad = 20, topPad = 20, bottomPad = 30;
+    const innerW = W - leftPad - rightPad;
+    const n = labels.length;
+    if (!n){ drawEmpty(ctx, W, H, 'No data'); return; }
+
+    const maxVal = Math.max(1, ...prevData, ...currData);
+    const rowH = Math.max(20, (H - topPad - bottomPad) / n);
+    for (let i=0;i<n;i++){
+      const y = topPad + i*rowH + rowH*0.15;
+      ctx.fillStyle = '#e0e0e0'; ctx.fillText(labels[i], 10, y + 10);
+      const pW = innerW * (prevData[i]/maxVal);
+      const cW = innerW * (currData[i]/maxVal);
+      ctx.fillStyle = 'rgba(255,99,132,0.8)'; ctx.fillRect(leftPad, y, pW, rowH*0.3);
+      ctx.fillStyle = 'rgba(54,162,235,0.8)'; ctx.fillRect(leftPad, y+rowH*0.35, cW, rowH*0.3);
+    }
+    ctx.fillStyle = 'rgba(255,99,132,0.8)'; ctx.fillRect(W-200, 8, 14, 10); ctx.fillStyle='#e0e0e0'; ctx.fillText('Previous', W-180, 16);
+    ctx.fillStyle = 'rgba(54,162,235,0.8)'; ctx.fillRect(W-120, 8, 14, 10); ctx.fillStyle='#e0e0e0'; ctx.fillText('Current', W-100, 16);
+  }
+
+  function renderFlowFromHistory(){
+    const invHist = JSON.parse(localStorage.getItem(INV_HISTORY_KEY)||'[]');
+    if (!invHist.length){ drawFlow([],[],[]); return; }
+    const curr = invHist[invHist.length-1];
+    const prevMap = invHist.length>1 ? (invHist[invHist.length-2].kegMap||{}) : {};
+    const names = Object.keys(curr.kegMap||{});
+    const prevArr = names.map(n => +prevMap[n] || 0);
+    const currArr = names.map(n => +curr.kegMap[n] || 0);
+    const labels=[], p=[], c=[];
+    names.forEach((n,i)=>{ if ((prevArr[i]||0) > 0 || (currArr[i]||0) > 0) { labels.push(n); p.push(prevArr[i]); c.push(currArr[i]); } });
+    setHeightByCount(containerOfCanvas('flowChart'), labels.length, { base: 520, per: 24, threshold: 10, max: 1600 });
+    requestAnimationFrame(()=> drawFlow(labels, p, c));
+  }
+
+  // ===== Donut (capacity) =====
+  function drawDonut(labels, data){
+    const ctx = getCtx('capacityChart'); if(!ctx) return;
+    const canvas = document.getElementById('capacityChart');
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    ctx.clearRect(0,0,W,H);
+    const cx = Math.min(W*0.62, W-240), cy = H/2;
+    const radius = Math.min(H, W) * 0.30;
+    const inner = radius * 0.62;
+    const total = Math.max(1, data.reduce((s,v)=>s+v,0));
+    const n = Math.max(1, labels.length);
+    const colors = labels.map((_,i)=>`hsl(${i*360/n},60%,60%)`);
+    let a0 = -Math.PI/2;
+    for (let i=0;i<labels.length;i++){
+      const frac = data[i]/total;
+      const a1 = a0 + frac * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.fillStyle = colors[i];
+      ctx.arc(cx, cy, radius, a0, a1);
+      ctx.arc(cx, cy, inner, a1, a0, true);
+      ctx.closePath();
+      ctx.fill();
+      a0 = a1;
+    }
+    // legend left, with totals
+    const lx = 20, ly0 = 40, lh = 20;
+    ctx.font = '12px Arial'; ctx.fillStyle = '#e0e0e0';
+    for (let i=0;i<labels.length;i++){
+      ctx.fillStyle = colors[i]; ctx.fillRect(lx, ly0 + i*lh - 10, 12, 12);
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillText(`${labels[i]} — ${data[i]}`, lx+18, ly0 + i*lh);
+    }
+  }
+
+  function renderCapacityFromHistory(){
+    const invHist = JSON.parse(localStorage.getItem(INV_HISTORY_KEY)||'[]');
+    if (!invHist.length){ drawDonut([],[]); return; }
+    const curr = invHist[invHist.length-1];
+    const kegMap = curr.kegMap||{};
+    const labels = Object.keys(kegMap).filter(k=>kegMap[k]>0);
+    const vals = labels.map(k=>kegMap[k]);
+    const used = vals.reduce((s,v)=>s+v,0);
+    const totalSlots = 56; // configurable baseline
+    const allLabels = [...labels, 'Free Space'];
+    const allVals = [...vals, Math.max(0, totalSlots - used)];
+    setHeightByCount(containerOfCanvas('capacityChart'), allLabels.length + 1, { base: 520, per: 18, threshold: 10, max: 1600 });
+    drawDonut(allLabels, allVals);
+  }
+
+  // ===== Sankey (custom) =====
+  function computeTotals(entry, unit) {
+    const out = {};
+    const prods = new Set([...(Object.keys(entry.kegMap||{})), ...Object.keys(entry.kegBySize||{})]);
+    prods.forEach(p => {
+      if (unit === 'keg') {
+        out[p] = +(entry.kegMap?.[p] || 0);
+      } else {
+        let b = 0;
+        const per = entry.kegBySize?.[p];
+        if (per) {
+          const f = entry.sizeToFactor || {};
+          Object.entries(per).forEach(([col, cnt]) => {
+            const factor = f[col] ?? (/50L/.test(col) ? (50/117.3477651) : /5\.16/.test(col) ? (5.16/31) : (15.5/31));
+            b += (+cnt || 0) * factor;
+          });
+        } else {
+          b = (entry.kegMap?.[p] || 0) * 0.5;
+        }
+        out[p] = +b.toFixed(3);
+      }
+    });
+    return out;
+  }
+
+  function updateSankey(links) {
+    const holder = document.getElementById('sankeyHolder');
+    if (!holder) return;
+    holder.innerHTML = '<canvas id="sankeyCanvas"></canvas>';
+    const canvas = document.getElementById('sankeyCanvas');
+
+    if (!Array.isArray(links) || links.length === 0) {
+      const ctx = getCtx('sankeyCanvas');
+      const W = canvas.clientWidth, H = canvas.clientHeight;
+      ctx.clearRect(0,0,W,H);
+      const note = document.createElement('div'); note.className='notice';
+      note.textContent = 'No flow yet. Upload two snapshots (previous + current) to see consumption movement.';
+      holder.appendChild(note);
+      return;
+    }
+
+    const ctx = getCtx('sankeyCanvas');
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    ctx.clearRect(0,0,W,H);
+
+    function drawRoundRect(ctx, x, y, w, h, r) {
+      r = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x+r, y);
+      ctx.lineTo(x+w-r, y);
+      ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+      ctx.lineTo(x+w, y+h-r);
+      ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+      ctx.lineTo(x+r, y+h);
+      ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+      ctx.lineTo(x, y+r);
+      ctx.quadraticCurveTo(x, y, x+r, y);
+      ctx.closePath();
+    }
+    function drawPill(text, x, y){
+      ctx.font = '12px Arial';
+      const padX = 8, h = 18;
+      const w = Math.ceil(ctx.measureText(text).width) + padX*2;
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--pill-bg') || 'rgba(255,255,255,0.08)';
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--pill-stroke') || 'rgba(255,255,255,0.18)';
+      drawRoundRect(ctx, x, y - h/2, w, h, 9); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0e0e0'; ctx.fillText(text, x + padX, y + 4.5);
+      return w;
+    }
+
+    const froms = new Map(), tos = new Map();
+    links.forEach(l => { froms.set(l.from, (froms.get(l.from)||0) + l.flow); tos.set(l.to, (tos.get(l.to)||0) + l.flow); });
+    const leftLabel = Array.from(froms.keys())[0];
+    const toList = Array.from(tos.entries()).sort((a,b)=>b[1]-a[1]);
+    const totalFlow = toList.reduce((s,[,v])=>s+v,0) || 1;
+    setHeightByCount(holder, Math.max(2, toList.length + 1), { base: 520, per: 28, threshold: 8, max: 2400, min: 520 });
+
+    const margin = { top: 28, right: 170, bottom: 28, left: 170 };
+    const xL = margin.left;
+    const leftW = 22;
+    const xMid = Math.round(W * 0.52);
+    const midW = 12;
+    const xR = W - margin.right;
+    const gap = 12;
+    const usableH = Math.max(1, H - margin.top - margin.bottom);
+    const minStroke = 6;
+    const scale = (usableH - gap*Math.max(0, toList.length - 1)) / totalFlow;
+
+    let yR = margin.top;
+    const rightSlots = toList.map(([name,val], i) => {
+      const h = Math.max(minStroke, val * scale);
+      const color = `hsl(${(i*360/toList.length)|0},60%,58%)`;
+      const slot = { name, val, y: yR, h, color };
+      yR += h + gap;
+      return slot;
+    });
+
+    const leftH = rightSlots.reduce((s,a)=>s+a.h,0) + (rightSlots.length>1 ? gap*(rightSlots.length-1) : 0);
+    const midH  = rightSlots.reduce((s,a)=>s+a.h,0);
+    const yTop = margin.top;
+
+    ctx.fillStyle = '#4a90e2'; drawRoundRect(ctx, xL - leftW, yTop, leftW, leftH, 9); ctx.fill();
+    ctx.fillStyle = '#3d6aa0'; drawRoundRect(ctx, xMid - midW/2, yTop, midW, midH, 6); ctx.fill();
+
+    drawPill(leftLabel, xL - leftW - 12 - 140, yTop + leftH/2);
+    drawPill(`Total ${sankeyUnit.toUpperCase()}`, xMid - midW/2 - 12 - 120, yTop + midH/2);
+
+    let leftOffset = 0, midOffset = 0;
+    rightSlots.forEach(slot => {
+      const lw = slot.h, yS = yTop + leftOffset + lw/2, yM = yTop + midOffset + lw/2;
+      ctx.save(); ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = lw + 2;
+      ctx.beginPath(); ctx.moveTo(xL, yS);
+      ctx.bezierCurveTo(xL + (xMid-xL)*0.35, yS, xMid - (xMid-xL)*0.35, yM, xMid, yM); ctx.stroke(); ctx.restore();
+      ctx.strokeStyle = slot.color; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(xL, yS);
+      ctx.bezierCurveTo(xL + (xMid-xL)*0.35, yS, xMid - (xMid-xL)*0.35, yM, xMid, yM); ctx.stroke();
+      leftOffset += lw + gap; midOffset += lw;
+    });
+
+    let midOffset2 = 0;
+    rightSlots.forEach(slot => {
+      const lw = slot.h, yM = yTop + midOffset2 + lw/2, yRmid = slot.y + lw/2;
+      ctx.save(); ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = lw + 2;
+      ctx.beginPath(); ctx.moveTo(xMid, yM);
+      ctx.bezierCurveTo(xMid + (xR-xMid)*0.35, yM, xR - (xR-xMid)*0.35, yRmid, xR, yRmid); ctx.stroke(); ctx.restore();
+      ctx.strokeStyle = slot.color; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(xMid, yM);
+      ctx.bezierCurveTo(xMid + (xR-xMid)*0.35, yM, xR - (xR-xMid)*0.35, yRmid, xR, yRmid); ctx.stroke();
+      ctx.fillStyle = slot.color; drawRoundRect(ctx, xR + 6, slot.y, 16, lw, 6); ctx.fill();
+      ctx.fillStyle = '#e0e0e0'; drawPill(`${slot.name} (${slot.val})`, xR + 6 + 16 + 10, slot.y + lw/2);
+      midOffset2 += lw;
+    });
+  }
+
+  function renderSankeyFromHistory(){
+    if (viewCleared) { updateSankey([]); return; }
+    const invHist = JSON.parse(localStorage.getItem(INV_HISTORY_KEY)||'[]');
+    if (invHist.length < 2) { updateSankey([]); return; }
+    const prev = invHist[invHist.length-2];
+    const curr = invHist[invHist.length-1];
+    const prevTot = computeTotals(prev, sankeyUnit);
+    const currTot = computeTotals(curr, sankeyUnit);
+    const names = new Set([...Object.keys(prevTot), ...Object.keys(currTot)]);
+    const modeLabel = (sankeyMode === 'consumed') ? 'Consumed' : 'Added';
+    const leftLabel = `${modeLabel} (${sankeyUnit.toUpperCase()})`;
+    const links = [];
+    names.forEach(n => {
+      const a = +prevTot[n] || 0, b = +currTot[n] || 0;
+      const diff = (sankeyMode === 'consumed') ? Math.max(a-b,0) : Math.max(b-a,0);
+      if (diff > 0) links.push({ from: leftLabel, to: n, flow: +diff.toFixed(3) });
+    });
+    links.sort((x,y)=>y.flow-x.flow);
+    updateSankey(links);
+  }
+
+  // ===== Simple Bar charts for Kegs/Can =====
+  function drawBar(canvasId, labels, values, color){
+    const ctx = getCtx(canvasId); if(!ctx) return;
+    const canvas = document.getElementById(canvasId);
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    ctx.clearRect(0,0,W,H);
+    const leftPad = 140, rightPad = 20, topPad = 20, bottomPad = 30;
+    const innerW = W - leftPad - rightPad;
+    const n = labels.length;
+    if (!n) { drawEmpty(ctx, W, H, 'No data'); return; }
+    const maxVal = Math.max(1, ...values);
+    const rowH = Math.max(20, (H - topPad - bottomPad) / n);
+    ctx.font = '12px Arial'; ctx.fillStyle = '#e0e0e0';
+    for (let i=0;i<n;i++){
+      const y = topPad + i*rowH + rowH*0.2;
+      ctx.fillText(labels[i], 10, y + 12);
+      const w = innerW * (values[i]/maxVal);
+      ctx.fillStyle = color || 'rgba(54,162,235,0.8)';
+      ctx.fillRect(leftPad, y, w, rowH*0.6);
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillText(values[i], leftPad + w + 6, y + rowH*0.6 - 2);
+    }
+  }
+
+  function renderBarsFromHistory(){
+    const invHist = JSON.parse(localStorage.getItem(INV_HISTORY_KEY)||'[]');
+    if (!invHist.length){ drawBar('kegChart',[],[], null); drawBar('canChart',[],[], null); return; }
+    const curr = invHist[invHist.length-1];
+    const kegMap = curr.kegMap||{};
+    const canMap = curr.canMap||{};
+    const kegLabels = Object.keys(kegMap).filter(k => kegMap[k] > 0);
+    setHeightByCount(containerOfCanvas('kegChart'), kegLabels.length, { base: 520, per: 24, threshold: 10, max: 1800 });
+    drawBar('kegChart', kegLabels, kegLabels.map(k => kegMap[k]), 'rgba(54,162,235,0.85)');
+    const canLabels = Object.keys(canMap).filter(k => canMap[k] > 0);
+    setHeightByCount(containerOfCanvas('canChart'), canLabels.length, { base: 520, per: 24, threshold: 10, max: 1800 });
+    drawBar('canChart', canLabels, canLabels.map(k => canMap[k]), 'rgba(255,159,64,0.9)');
+  }
+
+  // ===== Cooler layout =====
+  function persistPallets() {
+    const data = {};
+    document.querySelectorAll('.cooler-grid .pallet').forEach(card => {
+      const label = card.querySelector('.pallet-header label')?.textContent || '';
+      const num = (label.match(/Pallet\\s+(\\d+)/)||[])[1];
+      if (!num) return;
+      data[num] = [];
+      card.querySelectorAll('.entry').forEach(row => {
+        const sel = row.querySelector('select');
+        const qty = row.querySelector('input[type=number]');
+        const prod = sel?.value || '';
+        const q = Number(qty?.value||0);
+        if (prod && q>0) data[num].push({ product: prod, qty: q });
+      });
+    });
+    localStorage.setItem(PALLET_KEY, JSON.stringify(data));
+  }
+  function addEntryRow(container, product = '', qty = 0) {
+    const row = document.createElement('div'); row.className = 'entry';
+    const sel = document.createElement('select');
+    (window.availableProducts||[]).forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
+    if (product) sel.value = product;
+    const num = document.createElement('input'); num.type='number'; num.min=0; num.value=qty;
+    const rm = document.createElement('button'); rm.type='button'; rm.className='remove'; rm.textContent='×';
+    rm.addEventListener('click', ()=>{ row.remove(); persistPallets(); });
+    sel.addEventListener('change', persistPallets);
+    num.addEventListener('input', persistPallets);
+    row.append(sel, num, rm); container.appendChild(row);
+    persistPallets();
+  }
+  function renderPallets(data) {
+    const grid = document.querySelector('.cooler-grid'); if (!grid) return; grid.innerHTML = '';
+    const positions = {1:{r:4,c:4},2:{r:3,c:4},3:{r:2,c:4},4:{r:1,c:4},5:{r:2,c:3},6:{r:3,c:3},7:{r:4,c:3},8:{r:4,c:2},9:{r:3,c:2},10:{r:2,c:2},11:{r:2,c:1},12:{r:3,c:1},13:{r:4,c:1}};
+    Object.entries(positions).forEach(([num,pos]) => {
+      const div = document.createElement('div'); div.className='pallet'; div.style.gridRowStart=pos.r; div.style.gridColumnStart=pos.c;
+      div.innerHTML = '<div class="pallet-header"><label>Pallet '+num+'</label><button type="button" class="add-btn">+ Item</button></div><div class="entries"></div>';
+      grid.appendChild(div);
+      const entriesEl = div.querySelector('.entries');
+      div.querySelector('.add-btn').addEventListener('click', () => addEntryRow(entriesEl));
+      (data?.[num] || []).forEach(e => addEntryRow(entriesEl, e.product, e.qty));
+    });
+  }
+
+  // ===== Serving tanks (custom donuts) =====
+  const maxCapBBLPerTank = 12.7;
+  function saveTankData(id, percent, product) {
+    const stored = JSON.parse(localStorage.getItem(TANK_DATA_KEY) || '{}');
+    stored[id] = { percent: percent != null ? percent : (stored[id]?.percent||0), product: product != null ? product : (stored[id]?.product||'') };
+    localStorage.setItem(TANK_DATA_KEY, JSON.stringify(stored));
+  }
+  function appendTankHistory() {
+    const hist = JSON.parse(localStorage.getItem(TANK_HISTORY_KEY) || '[]');
+    const snap = JSON.parse(localStorage.getItem(TANK_DATA_KEY) || '{}');
+    const entry = { ts: new Date().toISOString(), tanks: {} };
+    for (let i=1;i<=6;i++) {
+      const id='ST'+i; const p=snap[id]?.percent||0; const prod=snap[id]?.product||'';
+      entry.tanks[id] = { product: prod, percent: p, bbl: +(p*maxCapBBLPerTank/100).toFixed(3) };
+    }
+    hist.push(entry); localStorage.setItem(TANK_HISTORY_KEY, JSON.stringify(hist));
+  }
+  function drawTankDonut(cnv, percent){
+    const ctx = cnv.getContext('2d');
+    const dpr = window.devicePixelRatio||1;
+    const size = 120;
+    cnv.width = size*dpr; cnv.height = size*dpr; cnv.style.width = size+'px'; cnv.style.height=size+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const W=size,H=size,cx=W/2,cy=H/2,r=52,inner=34;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.arc(cx,cy,inner,Math.PI*2,0,true); ctx.closePath(); ctx.fill();
+    const frac=Math.max(0,Math.min(1,percent/100));
+    ctx.fillStyle='#f1c40f'; ctx.beginPath(); ctx.moveTo(cx,cy);
+    const a0=-Math.PI/2, a1=a0+frac*Math.PI*2;
+    ctx.arc(cx,cy,r,a0,a1); ctx.arc(cx,cy,inner,a1,a0,true); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#e0e0e0'; ctx.font='12px Arial'; ctx.textAlign='center';
+    ctx.fillText(percent+'%', cx, cy+4);
+  }
+  function initTanks() {
+    const cont = document.getElementById('tanksGrid'); if (!cont) return; cont.innerHTML='';
+    const stored = JSON.parse(localStorage.getItem(TANK_DATA_KEY) || '{}');
+    for (let i=1;i<=6;i++) {
+      const id='ST'+i; const entry=stored[id]||{}; const percent=entry.percent||0; const product=entry.product||'';
+      const div=document.createElement('div'); div.className='tank';
+      const lbl=document.createElement('label'); lbl.textContent=id;
+      const sel=document.createElement('select'); sel.id='select'+id;
+      (window.availableProducts||[]).forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);});
+      if (product) sel.value=product;
+      const inp=document.createElement('input'); inp.type='number'; inp.id='input'+id; inp.min=0; inp.max=100; inp.value=percent;
+      const cnv=document.createElement('canvas'); cnv.id='chart'+id;
+      sel.addEventListener('change',()=>{ saveTankData(id,null,sel.value); });
+      inp.addEventListener('input',()=>{ let v=+inp.value; v=Math.max(0,Math.min(100,v)); inp.value=v; drawTankDonut(cnv,v); saveTankData(id,v,null); });
+      div.append(lbl, sel, inp, cnv); cont.appendChild(div);
+      drawTankDonut(cnv, percent);
+    }
+  }
+  document.getElementById('saveTanks').addEventListener('click', () => { appendTankHistory(); alert('Tanks saved & archived.'); });
+
+  // ===== File / History wiring =====
+  document.getElementById('datafile').addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = parseCSVText(reader.result);
+      const rows = res.data;
+      if (!rows || rows.length < 4) { alert('Require ≥4 rows'); return; }
+      processData(rows, file.name);
+    };
+    reader.readAsText(file);
+  });
+
+  // Clear View (keep stored data intact)
+  (function bindClear(){
+    const btn = document.getElementById('clearView');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      if (!confirm('Clear the current view only? Stored data will be preserved.')) return;
+      clearActiveUI();
+      alert('View cleared. Stored data preserved.');
+    });
+  })();
+
+  // Export / Import
+  document.getElementById('exportData').addEventListener('click', () => {
+    const dump = {
+      inventoryHistory: JSON.parse(localStorage.getItem(INV_HISTORY_KEY)||'[]'),
+      kegSnapshot: JSON.parse(localStorage.getItem(KEG_SNAPSHOT_KEY)||'{}'),
+      palletData: JSON.parse(localStorage.getItem(PALLET_KEY)||'{}'),
+      tankData: JSON.parse(localStorage.getItem(TANK_DATA_KEY)||'{}'),
+      tankDataHistory: JSON.parse(localStorage.getItem(TANK_HISTORY_KEY)||'[]')
+    };
+    const blob = new Blob([JSON.stringify(dump, null, 2)], {type: 'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'cellar-bonanza-backup.json'; a.click(); URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('importDataBtn').addEventListener('click',()=>document.getElementById('importData').click());
+  document.getElementById('importData').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = () => {
+      try {
+        const obj = JSON.parse(reader.result);
+        if (obj.inventoryHistory) localStorage.setItem(INV_HISTORY_KEY, JSON.stringify(obj.inventoryHistory));
+        if (obj.kegSnapshot) localStorage.setItem(KEG_SNAPSHOT_KEY, JSON.stringify(obj.kegSnapshot));
+        if (obj.palletData) localStorage.setItem(PALLET_KEY, JSON.stringify(obj.palletData));
+        if (obj.tankData) localStorage.setItem(TANK_DATA_KEY, JSON.stringify(obj.tankData));
+        if (obj.tankDataHistory) localStorage.setItem(TANK_HISTORY_KEY, JSON.stringify(obj.tankDataHistory));
+        alert('Import complete. Repainting…'); viewCleared = false; queueRepaint(); initTanks(); renderPallets(JSON.parse(localStorage.getItem(PALLET_KEY) || '{}'));
+      } catch (err) { alert('Invalid JSON.'); }
+    }; reader.readAsText(f);
+  });
+
+  // Demo loader (Week 1)
+  document.getElementById('loadDemo').addEventListener('click', () => {
+    const rows = [
+      ['Distribution Inventory - Demo Snapshot'],
+      ['Locations: COLDBOX | WHOLESALE'],
+      ['Product','Kegs 15.5-gal','Kegs 50L','Kegs 5.16-gal','Cans 16-oz  [4pk x 6]','Cans 12-oz  [6pk x 4]'],
+      ['Blood Orange Kolsch', 4, 7, 2, 0, 206],
+      ['Pineapple Express IPA', 8, 0, 1, 0, 120],
+      ['Dark Lager', 0, 0, 0, 0, 0],
+      ['Pilsner Lite', 0, 3, 0, 24, 0]
+    ];
+    try { processData(rows, 'DEMO-W1'); } catch (e) { alert('Demo load failed: '+e.message); }
+  });
+
+  // Demo loader (Week 2)
+  document.getElementById('loadDemoWeek2').addEventListener('click', () => {
+    const history = JSON.parse(localStorage.getItem(INV_HISTORY_KEY)||'[]');
+    if (!history.length) {
+      const w1 = [
+        ['Distribution Inventory - Demo Snapshot'],
+        ['Locations: COLDBOX | WHOLESALE'],
+        ['Product','Kegs 15.5-gal','Kegs 50L','Kegs 5.16-gal','Cans 16-oz  [4pk x 6]','Cans 12-oz  [6pk x 4]'],
+        ['Blood Orange Kolsch', 4, 7, 2, 0, 206],
+        ['Pineapple Express IPA', 8, 0, 1, 0, 120],
+        ['Dark Lager', 0, 0, 0, 0, 0],
+        ['Pilsner Lite', 0, 3, 0, 24, 0]
+      ];
+      processData(w1, 'DEMO-W1');
+    }
+    const w2 = [
+      ['Distribution Inventory - Demo Snapshot (Week 2)'],
+      ['Locations: COLDBOX | WHOLESALE'],
+      ['Product','Kegs 15.5-gal','Kegs 50L','Kegs 5.16-gal','Cans 16-oz  [4pk x 6]','Cans 12-oz  [6pk x 4]'],
+      ['Blood Orange Kolsch', 3, 8, 2, 0, 190],
+      ['Pineapple Express IPA', 6, 0, 2, 0, 100],
+      ['Pilsner Lite', 0, 4, 0, 12, 0]
+    ];
+    try { processData(w2, 'DEMO-W2'); } catch (e) { alert('Demo W2 load failed: '+e.message); }
+  });
+
+  // ===== Main parse/render =====
+  function processData(data, sourceName='') {
+    viewCleared = false;
+    const header = (data[2] || []).map(h => (h||'').toString().trim());
+    const kegIdx = header.map((h,i)=> (typeof h === 'string' && h.startsWith('Kegs')) ? i : -1).filter(i=>i>=0);
+    const canIdx = header.map((h,i)=> (typeof h === 'string' && h.startsWith('Cans')) ? i : -1).filter(i=>i>=0);
+
+    const kegMap = {}; const canMap = {}; const namesSet = new Set();
+    data.slice(3).forEach(row => {
+      const name = row[0]; if (!name) return; namesSet.add(name);
+      const kc = kegIdx.reduce((s,ix)=> s + (+row[ix] || 0), 0);
+      const cc = canIdx.reduce((s,ix)=> s + (+row[ix] || 0), 0);
+      kegMap[name] = kc; if (cc > 0) canMap[name] = cc;
+    });
+    const names = Array.from(namesSet);
+
+    const invHist = JSON.parse(localStorage.getItem(INV_HISTORY_KEY) || '[]');
+    const prevMap = invHist.length ? (invHist[invHist.length-1].kegMap || {}) : {};
+
+    const sizeToFactor = {};
+    kegIdx.forEach(ix=>{ const col = header[ix]; let f = 0.5; if (/50L/.test(col)) f = 50/117.3477651; else if (/5\.16/.test(col)) f = 5.16/31; else if (/15\.5/.test(col)) f = 15.5/31; sizeToFactor[col] = f; });
+    const kegBySize = {};
+    data.slice(3).forEach(row => {
+      const name = row[0]; if (!name) return;
+      const per = {};
+      kegIdx.forEach(ix => { const col = header[ix]; const v = +row[ix] || 0; if (v > 0) per[col] = (per[col]||0) + v; });
+      if (Object.keys(per).length) kegBySize[name] = per;
+    });
+
+    // Flow chart from last two snapshots
+    const prevArr = names.map(n => +prevMap[n] || 0);
+    const currArr = names.map(n => +kegMap[n] || 0);
+    const labels=[], p=[], c=[];
+    names.forEach((n,i)=>{ if ((prevArr[i]||0) > 0 || (currArr[i]||0) > 0) { labels.push(n); p.push(prevArr[i]); c.push(currArr[i]); } });
+    setHeightByCount(containerOfCanvas('flowChart'), labels.length, { base: 520, per: 24, threshold: 10, max: 1600 });
+    drawFlow(labels, p, c);
+
+    // Keg/Can bars (hide zeros)
+    const kegLabels = Object.keys(kegMap).filter(k => kegMap[k] > 0);
+    setHeightByCount(containerOfCanvas('kegChart'), kegLabels.length, { base: 520, per: 24, threshold: 10, max: 1800 });
+    drawBar('kegChart', kegLabels, kegLabels.map(k => kegMap[k]), 'rgba(54,162,235,0.85)');
+    const canLabels = Object.keys(canMap).filter(k => canMap[k] > 0);
+    setHeightByCount(containerOfCanvas('canChart'), canLabels.length, { base: 520, per: 24, threshold: 10, max: 1800 });
+    drawBar('canChart', canLabels, canLabels.map(k => canMap[k]), 'rgba(255,159,64,0.9)');
+
+    // Capacity donut (baseline 56 slots)
+    const used = kegLabels.reduce((s,k)=>s + kegMap[k], 0);
+    setHeightByCount(containerOfCanvas('capacityChart'), kegLabels.length + 1, { base: 520, per: 18, threshold: 10, max: 1600 });
+    drawDonut([...kegLabels,'Free Space'], [...kegLabels.map(k=>kegMap[k]), Math.max(0, 56 - used)]);
+
+    // Update product list for dropdowns
+    window.availableProducts = kegLabels;
+    initTanks();
+
+    // Persist
+    snapshot = kegMap;
+    localStorage.setItem(KEG_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    invHist.push({ ts: new Date().toISOString(), source: sourceName, header, kegMap, canMap, sizeToFactor, kegBySize });
+    localStorage.setItem(INV_HISTORY_KEY, JSON.stringify(invHist));
+
+    // Re-render via queue
+    queueRepaint();
+    // Re-render pallets with existing saved state
+    renderPallets(JSON.parse(localStorage.getItem(PALLET_KEY) || '{}'));
+  }
+
+  // Clear only the ACTIVE DISPLAY (keep stored data)
+  function clearActiveUI(){
+    viewCleared = true;
+    ['flowChart','kegChart','canChart','capacityChart','sankeyCanvas'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { const ctx = el.getContext('2d'); const W = el.clientWidth, H = el.clientHeight; ctx.clearRect(0,0,W,H); }
+    });
+    const holder = document.getElementById('sankeyHolder');
+    if (holder) holder.innerHTML = '<canvas id="sankeyCanvas"></canvas>';
+    const grid = document.querySelector('.cooler-grid'); if (grid) grid.innerHTML = '';
+    const tanks = document.getElementById('tanksGrid'); if (tanks) tanks.innerHTML = '';
+    const df = document.getElementById('datafile'); if (df) df.value = '';
+  }
+
+  // ===== Initial paint & resize hooks =====
+  renderPallets(JSON.parse(localStorage.getItem(PALLET_KEY) || '{}'));
+  initTanks();
+  drawFlow([], [], []);
+  updateSankey([]);
+  drawBar('kegChart',[],[], null);
+  drawBar('canChart',[],[], null);
+  drawDonut([], []);
+
+  (function initSankeyControls(){
+    const modeSel = document.getElementById('sankeyMode');
+    const unitSel = document.getElementById('sankeyUnit');
+    if (modeSel) { modeSel.value = sankeyMode; modeSel.addEventListener('change', ()=>{ sankeyMode = modeSel.value; localStorage.setItem('sankeyMode', sankeyMode); queueRepaint(); }); }
+    if (unitSel) { unitSel.value = sankeyUnit; unitSel.addEventListener('change', ()=>{ sankeyUnit = unitSel.value; localStorage.setItem('sankeyUnit', sankeyUnit); queueRepaint(); }); }
+  })();
+
+  queueRepaint();
+
+  (function(){
+    let resizeRAF = 0;
+    window.addEventListener('resize', () => {
+      cancelAnimationFrame(resizeRAF);
+      resizeRAF = requestAnimationFrame(() => queueRepaint());
+    }, {passive:true});
+  })();
+
+  (function bindClear(){
+    const btn = document.getElementById('clearView');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      if (!confirm('Clear the current view only? Stored data will be preserved.')) return;
+      clearActiveUI();
+      alert('View cleared. Stored data preserved.');
+    });
+  })();
+
+});
+</script>
 </body>
+</html>
